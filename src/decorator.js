@@ -1,5 +1,13 @@
 const { randomUUID } = require("crypto")
 
+const isUiDisabled = process.env.UI_DISABLED
+let ui
+
+if (!isUiDisabled) {
+    const Ui = require('./ui')
+    ui = new Ui()
+} else ui = { updateGraph: () => {} }
+
 function route(target, {
     kind,
     name
@@ -18,13 +26,15 @@ function route(target, {
 }
 
 const log = (...args) => {
-    console.log(...args)
+    if (isUiDisabled)
+        console.log(...args)
 }
 
 function onRequestEnded({
     data,
     response,
-    requestStartedAt
+    requestStartedAt,
+    methodsTimeTracker
 }) {
     return () => {
         const requestEndedAt = performance.now()
@@ -35,6 +45,12 @@ function onRequestEnded({
         data.statusMessage = response.statusMessage
         data.elapsed = timeDiff.toFixed(2).concat('ms')
         log('Benchmark', data)
+
+        const diffTracker = requestEndedAt - methodsTimeTracker[data.method]
+        if (diffTracker >= 90) {
+            ui.updateGraph(data.method, seconds)
+            methodsTimeTracker[data.method] = performance.now()
+        }
     }
 }
 
@@ -46,7 +62,6 @@ function responseTimeTracker(target, {
 
     return function (request, response) {
         const requestStartedAt = performance.now()
-
         const afterExecution = target.apply(this, [request, response])
 
         const requestId = randomUUID()
@@ -57,10 +72,15 @@ function responseTimeTracker(target, {
             url: request.url
         }
 
+        const methodsTimeTracker = {
+            GET: performance.now(),
+            POST: performance.now()
+        }
         const onFinally = onRequestEnded({
             data,
             response,
-            requestStartedAt
+            requestStartedAt,
+            methodsTimeTracker  
         })
         afterExecution.finally(onFinally)
 

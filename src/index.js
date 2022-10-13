@@ -2,6 +2,7 @@ const { responseTimeTracker, route } = require("./decorator")
 const { createServer } = require('http')
 const { once } = require("events")
 const { randomUUID } = require("crypto")
+const { setTimeout } = require('timers/promises')
 
 const database = new Map()
 
@@ -9,6 +10,8 @@ class Server {
     @responseTimeTracker
     @route
     static async handler(request, response) {
+        await setTimeout(parseInt(Math.random() * 100))
+        
         if (request.method === "POST") {
             const data = await once(request, "data")
             const user = JSON.parse(data)
